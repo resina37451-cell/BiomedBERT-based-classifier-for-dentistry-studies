@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BiomedBERT — Classificador de Artigos</title>
+<style>
+  :root {
+    --zorin-blue:       #15A6F0;
+    --zorin-blue-dark:  #0E8FD4;
+    --zorin-blue-light: #E3F4FD;
+    --bg:               #F0F0F0;
+    --surface:          #FFFFFF;
+    --surface2:         #F7F7F7;
+    --border:           #D0D0D0;
+    --text:             #2D2D2D;
+    --text-secondary:   #666666;
+    --success:          #2E7D32;
+    --success-bg:       #E8F5E9;
+    --error:            #C62828;
+    --error-bg:         #FFEBEE;
+    --radius:           6px;
+    --shadow:           0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+    --font:             'Cantarell', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .titlebar {
+    background: var(--zorin-blue); color: #fff;
+    padding: 0 1rem; height: 48px;
+    display: flex; align-items: center; gap: 0.75rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+  }
+  .titlebar-icon { width:24px;height:24px;background:rgba(255,255,255,0.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px; }
+  .titlebar-title { font-size:.95rem;font-weight:600; }
+  .titlebar-subtitle { font-size:.78rem;opacity:.85;margin-left:.25rem; }
+
+  .main { max-width:780px;margin:1.5rem auto;padding:0 1rem; }
+
+  .card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:1rem; }
+  .card-header { background:var(--surface2);border-bottom:1px solid var(--border);padding:.6rem 1rem;display:flex;align-items:center;gap:.5rem; }
+  .card-header-icon { color:var(--zorin-blue);font-size:1rem; }
+  .card-header h2 { font-size:.88rem;font-weight:600; }
+  .card-body { padding:1rem; }
+
+  .statusbar { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:.5rem 1rem;display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;font-size:.82rem; }
+  .status-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--border); }
+  .status-dot.online  { background:#2E7D32; }
+  .status-dot.offline { background:#C62828; }
+  .status-dot.busy    { background:var(--zorin-blue);animation:pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+  .status-label { color:var(--text-secondary); }
+  .status-msg   { color:var(--text);font-weight:500; }
+
+  .upload-wrap { margin-bottom:.85rem; }
+  .upload-label { display:block;font-size:.8rem;color:var(--text-secondary);margin-bottom:.3rem;font-weight:500; }
+  .upload-box { border:2px dashed var(--border);border-radius:var(--radius);padding:.9rem 1rem;display:flex;align-items:center;gap:.65rem;cursor:pointer;transition:border-color .15s,background .15s;background:var(--surface2);font-size:.84rem;color:var(--text-secondary); }
+  .upload-box:hover { border-color:var(--zorin-blue);background:var(--zorin-blue-light);color:var(--zorin-blue-dark); }
+  .upload-box.selected { border-color:var(--success);background:var(--success-bg);color:var(--success); }
+  input[type="file"] { display:none; }
+
+  .btn { display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.5rem .9rem;border:none;border-radius:var(--radius);font-size:.84rem;font-weight:600;font-family:var(--font);cursor:pointer;transition:background .15s,opacity .15s; }
+  .btn-primary { background:var(--zorin-blue);color:#fff;box-shadow:0 1px 3px rgba(21,166,240,.35); }
+  .btn-primary:hover:not(:disabled) { background:var(--zorin-blue-dark); }
+  .btn-outline { background:var(--surface);color:var(--zorin-blue);border:1.5px solid var(--zorin-blue); }
+  .btn-outline:hover:not(:disabled) { background:var(--zorin-blue-light); }
+  .btn:disabled { opacity:.4;cursor:not-allowed; }
+  .btn-full { width:100%; }
+  .btn-row { display:grid;grid-template-columns:1fr 1fr;gap:.6rem; }
+
+  .progress-wrap { margin-top:.85rem;display:none; }
+  .progress-track { height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:.4rem; }
+  .progress-fill { height:100%;background:var(--zorin-blue);border-radius:3px;transition:width .4s;width:0%; }
+  .progress-txt { font-size:.78rem;color:var(--text-secondary);text-align:center; }
+
+  .infobox { display:flex;align-items:flex-start;gap:.5rem;background:var(--zorin-blue-light);border:1px solid #B3DFF7;border-radius:var(--radius);padding:.65rem .85rem;font-size:.8rem;color:#0D6E9E;margin-bottom:.85rem; }
+
+  .alert { display:none;align-items:center;gap:.5rem;border-radius:var(--radius);padding:.6rem .85rem;font-size:.82rem;margin-top:.75rem; }
+  .alert.error   { background:var(--error-bg);color:var(--error);border:1px solid #FFCDD2; }
+  .alert.success { background:var(--success-bg);color:var(--success);border:1px solid #C8E6C9; }
+
+  .sep { border:none;border-top:1px solid var(--border);margin:.85rem 0; }
+  .download-section { display:none; }
+  .download-label { font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:.5rem;display:block; }
+
+  .terminal-hint { background:#1E1E1E;color:#A8FF78;border-radius:var(--radius);padding:.6rem .85rem;font-family:'Courier New',monospace;font-size:.78rem;margin-bottom:1rem; }
+  .terminal-hint span { color:#888; }
+
+  .cat-grid { display:grid;grid-template-columns:1fr 1fr;gap:1rem; }
+  .cat-title { font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:.5rem; }
+  .cat-list { font-size:.78rem;color:var(--text);line-height:1.75;list-style:none;padding:0; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="titlebar-icon">🧬</div>
+  <div class="titlebar-title">BiomedBERT Classificador</div>
+  <div class="titlebar-subtitle">— Artigos Científicos</div>
+</div>
+
+<div class="main">
+
+  <div class="terminal-hint">
+    <span>$</span> source ~/biomedbert-env/bin/activate &amp;&amp; cd ~/Downloads/biomedbert\ 2 &amp;&amp; python3 servidor.py
+  </div>
+
+  <div class="statusbar">
+    <div class="status-dot" id="dot"></div>
+    <span class="status-label">Servidor:</span>
+    <span class="status-msg" id="status-msg">verificando...</span>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-header-icon">🔍</span>
+      <h2>Classificar Artigos</h2>
+    </div>
+    <div class="card-body">
+      <div class="infobox">
+        <span>ℹ️</span>
+        <span>Selecione um arquivo <strong>.ris</strong> ou <strong>.rdf</strong> exportado do Zotero. A classificação roda em background — a barra de progresso atualiza automaticamente.</span>
+      </div>
+
+      <div class="upload-wrap">
+        <label class="upload-label">Arquivo RIS ou RDF</label>
+        <div class="upload-box" id="box-ris" onclick="document.getElementById('inp-ris').click()">
+          <span>📂</span>
+          <span id="txt-ris">Clique para selecionar .ris ou .rdf</span>
+        </div>
+        <input type="file" id="inp-ris" accept=".ris,.rdf,.xml">
+      </div>
+
+      <button class="btn btn-primary btn-full" id="btn-classificar" onclick="classificar()" disabled>
+        ▶ Classificar
+      </button>
+
+      <div class="progress-wrap" id="prog-class">
+        <div class="progress-track"><div class="progress-fill" id="fill-class"></div></div>
+        <div class="progress-txt" id="txt-prog">Aguardando...</div>
+      </div>
+
+      <div class="alert error"   id="alert-erro"></div>
+      <div class="alert success" id="alert-ok"></div>
+
+      <div class="sep"></div>
+
+      <div class="download-section" id="download-section">
+        <span class="download-label">Baixar resultado:</span>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="baixar('json')">⬇ JSON completo</button>
+          <button class="btn btn-outline" onclick="baixar('md')">⬇ Tabela Markdown</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-header-icon">📋</span>
+      <h2>Categorias do Modelo</h2>
+    </div>
+    <div class="card-body">
+      <div class="cat-grid">
+        <div>
+          <div class="cat-title">ÁREA PRINCIPAL (4)</div>
+          <ul class="cat-list">
+            <li>• Áreas não relacionadas à saúde</li>
+            <li>• Ciências Biológicas e da Saúde</li>
+            <li>• Medicina</li>
+            <li>• Odontologia</li>
+          </ul>
+        </div>
+        <div>
+          <div class="cat-title">TIPO DE ESTUDO (7)</div>
+          <ul class="cat-list">
+            <li>• Caso clínico / Série de casos</li>
+            <li>• Estudo em animais</li>
+            <li>• Estudo in vitro</li>
+            <li>• Não foi possível classificar</li>
+            <li>• Observacional</li>
+            <li>• RCT</li>
+            <li>• Revisão</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = "http://127.0.0.1:5000";
+let arquivoRIS = null;
+let pollingTimer = null;
+let emClassificacao = false;
+
+document.getElementById("inp-ris").addEventListener("change", function() {
+  if (this.files[0]) {
+    arquivoRIS = this.files[0];
+    document.getElementById("txt-ris").textContent = "✔ " + this.files[0].name;
+    document.getElementById("box-ris").classList.add("selected");
+    document.getElementById("btn-classificar").disabled = false;
+    esconder("alert-erro");
+    esconder("alert-ok");
+    document.getElementById("download-section").style.display = "none";
+  }
+});
+
+async function classificar() {
+  if (!arquivoRIS || emClassificacao) return;
+  const form = new FormData();
+  form.append("arquivo", arquivoRIS);
+
+  emClassificacao = true;
+  document.getElementById("btn-classificar").disabled = true;
+  document.getElementById("download-section").style.display = "none";
+  mostrarProg(5, "Enviando arquivo...");
+  esconder("alert-erro");
+  esconder("alert-ok");
+
+  try {
+    const r = await fetch(`${API}/classificar`, { method: "POST", body: form });
+    const d = await r.json();
+
+    if (!r.ok) {
+      mostrarAlerta("alert-erro", "⚠ " + d.erro);
+      document.getElementById("btn-classificar").disabled = false;
+      esconderProg();
+      emClassificacao = false;
+      return;
+    }
+
+    // Servidor aceitou — iniciar polling
+    iniciarPolling();
+
+  } catch(e) {
+    mostrarAlerta("alert-erro", "⚠ Servidor offline. Execute python3 servidor.py no terminal.");
+    document.getElementById("btn-classificar").disabled = false;
+    esconderProg();
+    emClassificacao = false;
+  }
+}
+
+function iniciarPolling() {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/status`);
+      const d = await r.json();
+
+      if (d.etapa === "classificando") {
+        const pct = d.progresso || 30;
+        mostrarProg(pct, d.mensagem || "Classificando...");
+
+      } else if (d.etapa === "idle" && d.progresso === 100) {
+        clearInterval(pollingTimer);
+        emClassificacao = false;
+        const total = d.total || "?";
+        mostrarProg(100, `✔ ${total} artigos classificados.`);
+        mostrarAlerta("alert-ok", `✔ ${total} artigos classificados! Escolha o formato para baixar.`);
+        document.getElementById("btn-classificar").disabled = false;
+        document.getElementById("download-section").style.display = "block";
+
+      } else if (d.etapa === "erro") {
+        clearInterval(pollingTimer);
+        emClassificacao = false;
+        mostrarAlerta("alert-erro", "⚠ Erro: " + d.mensagem);
+        document.getElementById("btn-classificar").disabled = false;
+        esconderProg();
+      }
+    } catch(e) {
+      // servidor temporariamente ocupado — continua tentando
+    }
+  }, 3000); // verifica a cada 3 segundos
+}
+
+async function baixar(formato) {
+  try {
+    const r = await fetch(`${API}/baixar?formato=${formato}`);
+    if (!r.ok) {
+      const d = await r.json();
+      mostrarAlerta("alert-erro", "⚠ " + d.erro);
+      return;
+    }
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = formato === "md" ? "resultado_classificacao.md" : "resultado_classificacao.json";
+    a.click();
+  } catch(e) {
+    mostrarAlerta("alert-erro", "⚠ Erro ao baixar arquivo.");
+  }
+}
+
+function mostrarProg(pct, msg) {
+  document.getElementById("prog-class").style.display = "block";
+  document.getElementById("fill-class").style.width = pct + "%";
+  document.getElementById("txt-prog").textContent = msg;
+}
+function esconderProg() { document.getElementById("prog-class").style.display = "none"; }
+function mostrarAlerta(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = "flex";
+}
+function esconder(id) { document.getElementById(id).style.display = "none"; }
+
+async function atualizarStatus() {
+  const dot = document.getElementById("dot");
+  const msg = document.getElementById("status-msg");
+  try {
+    const r = await fetch(`${API}/status`);
+    const d = await r.json();
+    if (d.etapa === "classificando") {
+      dot.className = "status-dot busy";
+      msg.textContent = d.mensagem;
+    } else if (d.etapa === "erro") {
+      dot.className = "status-dot offline";
+      msg.textContent = "Erro: " + d.mensagem;
+    } else {
+      dot.className = "status-dot online";
+      msg.textContent = d.progresso === 100
+        ? "Online — " + d.mensagem
+        : "Online — modelo pronto para classificar";
+    }
+  } catch(e) {
+    dot.className = "status-dot offline";
+    msg.textContent = "Offline — execute python3 servidor.py no terminal";
+  }
+}
+atualizarStatus();
+setInterval(atualizarStatus, 8000);
+</script>
+</body>
+</html>
